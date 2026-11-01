@@ -1,0 +1,27 @@
+# virtual environment
+.venv/
+
+# jupyter checkpoints
+.ipynb_checkpoints/
+
+# python cache
+__pycache__/
+
+# course slides / assignment pdfs
+*.pdf
+
+# editor
+.vscode/
+
+# latex build files
+Dokumentacia/*.aux
+Dokumentacia/*.log
+Dokumentacia/*.out
+Dokumentacia/*.toc
+Dokumentacia/*.synctex.gz
+Dokumentacia/*.fdb_latexmk
+Dokumentacia/*.fls
+!Dokumentacia/zadanie.pdf
+
+# odovzdany archiv (AIS)
+*.zip
