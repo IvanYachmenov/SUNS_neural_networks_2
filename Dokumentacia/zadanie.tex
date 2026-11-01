@@ -1,0 +1,99 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[slovak]{babel}
+\usepackage{tgtermes}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+\graphicspath{{img/}}
+
+\newcommand{\obr}[3]{\begin{figure}[H]\centering\includegraphics[width=#2\textwidth]{#1}\caption{#3}\end{figure}}
+\newcommand{\blok}[1]{\par\medskip\textbf{#1}\par}
+
+\title{I-SUNS: Zadanie č. 2 \\ Stromy, stroje, hlasovania a redukcia dimenzie}
+\author{Ivan Yachmenov}
+\date{November 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Úvod}
+Cieľom zadania je natrénovať modely, ktoré predpovedajú koncentráciu oxidu uhoľnatého \textbf{CO} vo vzduchu
+v mg/m³. Cieľová premenná je stĺpec \textbf{co}, ide teda o \textbf{regresiu}. Dataset má 9 507 záznamov
+a 14 stĺpcov: identifikátor záznamu, dátum, mesiac, hodina, deň v týždni, ročné obdobie, odozvy piatich
+chemických senzorov, teplota a relatívna vlhkosť.
+
+Celé riešenie je v notebooku \texttt{assignment.ipynb}. Použité knižnice: \textbf{pandas} na prácu s dátami,
+\textbf{scikit-learn} na modely a redukciu dimenzie, \textbf{matplotlib} na grafy.
+
+\clearpage
+\section{Príprava dát}
+
+\subsection{Prieskum dát}
+% TODO
+
+\subsection{Čistenie dát}
+% TODO
+
+\subsection{Kódovanie}
+% TODO
+
+\subsection{Rozdelenie dát a normalizácia}
+% TODO
+
+\section{Modely}
+
+\subsection{Rozhodovací strom}
+% TODO
+
+\subsection{Vizualizácia stromu}
+% TODO
+
+\subsection{Ensemble model}
+% TODO
+
+\subsection{Dôležitosť príznakov}
+% TODO
+
+\subsection{SVM}
+% TODO
+
+\subsection{Porovnanie modelov a rezíduá}
+% TODO
+
+\section{Redukcia dimenzie}
+
+\subsection{3D graf vybraných príznakov}
+% TODO
+
+\subsection{3D graf po redukcii dimenzie}
+% TODO
+
+\subsection{Porovnanie grafov}
+% TODO
+
+\section{Výber podmnožiny príznakov}
+
+\subsection{Podľa korelačnej matice}
+% TODO
+
+\subsection{Podľa dôležitosti príznakov z ensemble modelu}
+% TODO
+
+\subsection{Podľa variancie pomocou PCA}
+% TODO
+
+\subsection{Porovnanie výsledkov}
+% TODO
+
+\section*{Záver}
+% TODO
+
+\end{document}
