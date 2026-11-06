@@ -25,75 +25,246 @@
 \maketitle
 
 \section*{Úvod}
-Cieľom zadania je natrénovať modely, ktoré predpovedajú koncentráciu oxidu uhoľnatého \textbf{CO} vo vzduchu
-v mg/m³. Cieľová premenná je stĺpec \textbf{co}, ide teda o \textbf{regresiu}. Dataset má 9 507 záznamov
-a 14 stĺpcov: identifikátor záznamu, dátum, mesiac, hodina, deň v týždni, ročné obdobie, odozvy piatich
-chemických senzorov, teplota a relatívna vlhkosť.
+Cieľom zadania je predpovedať koncentráciu oxidu uhoľnatého \textbf{co} (mg/m³) vo vzduchu z odoziev piatich
+chemických senzorov, teploty, vlhkosti a času merania. Výstup je spojité číslo, ide o \textbf{regresiu}.
+Dataset má 9 507 záznamov a 14 stĺpcov. Riešenie je v notebooku \texttt{assignment.ipynb}, použité knižnice
+sú \textbf{pandas}, \textbf{scikit-learn} a \textbf{matplotlib}.
 
-Celé riešenie je v notebooku \texttt{assignment.ipynb}. Použité knižnice: \textbf{pandas} na prácu s dátami,
-\textbf{scikit-learn} na modely a redukciu dimenzie, \textbf{matplotlib} na grafy.
+Modely hodnotím pomocou \textbf{MSE} (stredná kvadratická chyba), \textbf{RMSE} (jej odmocnina, v mg/m³)
+a \textbf{R²} (1 je dokonalá predikcia, 0 znamená, že model nie je lepší než priemer, hodnota môže byť aj záporná),
+vždy na trénovacej aj testovacej množine.
 
-\clearpage
 \section{Príprava dát}
 
-\subsection{Prieskum dát}
-% TODO
+\subsection{Popis dát}
+Súbor \texttt{air\_quality.csv} má 9 507 riadkov a 14 stĺpcov, jeden riadok je jedna hodina merania.
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{stĺpec} & \textbf{význam} & \textbf{hodnoty} \\
+\hline
+\textbf{instant} & index záznamu (ID) & 1 až 9 507 \\
+\textbf{date} & dátum merania & YYYY-MM-DD, 391 dní \\
+\textbf{month} & mesiac & 1 až 12 \\
+\textbf{hour} & hodina dňa & 0 až 23 \\
+\textbf{weekday} & deň v týždni & 0 až 6, 0 je nedeľa \\
+\textbf{season} & ročné obdobie (text) & winter, spring, summer, autumn \\
+\textbf{sensor\_co} & odozva senzora na CO & 600 až 2 100, bez jednotky \\
+\textbf{sensor\_nmhc} & odozva senzora na nemetánové uhľovodíky & 350 až 2 250 \\
+\textbf{sensor\_nox} & odozva senzora na oxidy dusíka & 300 až 2 700 \\
+\textbf{sensor\_no2} & odozva senzora na NO$_2$ & 550 až 2 800 \\
+\textbf{sensor\_o3} & odozva senzora na ozón & 200 až 2 550 \\
+\textbf{temperature} & teplota vzduchu & $-5$ až 40 °C \\
+\textbf{humidity} & relatívna vlhkosť & 0 až 100 \% \\
+\textbf{co} & \textbf{výstup}: koncentrácia CO z referenčného analyzátora & mg/m³ \\
+\hline
+\end{tabular}
+\end{center}
+
+Vstupy sú teda päť senzorov, dve meteorologické veličiny a čas (mesiac, hodina, deň, ročné obdobie).
+Z prieskumu (\texttt{info}, \texttt{isna}, \texttt{nunique}, \texttt{describe} s porovnaním oproti rozsahom
+z popisu stĺpcov, \texttt{value\_counts}): \textbf{season} má presne 4 povolené hodnoty a sedí s mesiacom,
+\textbf{month} a \textbf{weekday} sedia s \textbf{date}, všetky senzory a \textbf{humidity} sú v povolenom
+rozsahu, \textbf{temperature} má maximum 44,6 °C nad povolených 40.
 
 \subsection{Čistenie dát}
-% TODO
+Poradie krokov a počet riadkov po každom z nich:
+\begin{enumerate}[nosep]
+  \item \textbf{Duplikáty}: 150 riadkov zhodných vo všetkých 14 stĺpcoch (aj s rovnakým \textbf{instant}),
+  odstránené cez \texttt{drop\_duplicates}. 9 507 $\rightarrow$ 9 357 riadkov.
+  \item \textbf{Null hodnoty}: v 368 riadkoch chýba všetkých sedem meraní naraz (päť senzorov,
+  \textbf{temperature}, \textbf{humidity}), ide o výpadok stanice. V 1 716 riadkoch chýba výstup \textbf{co}.
+  Tieto riadky som odstránil cez \texttt{dropna}, spolu 2 013. Dopĺňať sedem hodnôt naraz alebo cieľovú
+  premennú by bolo vymýšľanie dát. 9 357 $\rightarrow$ 7 344 riadkov.
+  \item \textbf{Outliery podľa popisu stĺpcov}: jediný stĺpec mimo rozsahu je \textbf{temperature}
+  (60 hodnôt nad 40 °C v surových dátach, po predchádzajúcich krokoch 47 riadkov), odstránené.
+  7 344 $\rightarrow$ \textbf{7 297 riadkov}.
+  \item \textbf{Štatistické outliery} (IQR) som ponechal: 22 riadkov s \textbf{co} nad Q3 + 3·IQR (medián
+  8,7 mg/m³) má v tých istých hodinách vysoké aj \textbf{sensor\_co} a \textbf{sensor\_nmhc} a medián hodiny
+  18 až 19, je to večerná dopravná špička, teda reálne znečistenie, nie chyba merania.
+  \item \textbf{Odstránené stĺpce}: \textbf{instant} je len poradové číslo a \textbf{date} má 391 hodnôt,
+  pričom mesiac a deň v týždni z neho už sú v \textbf{month} a \textbf{weekday}.
+\end{enumerate}
+Spolu odstránených 2 210 riadkov (23 percent, väčšinou riadky bez \textbf{co}). Zostalo \textbf{7 297 riadkov}
+a 12 stĺpcov: 11 vstupov a výstup \textbf{co}.
 
 \subsection{Kódovanie}
-% TODO
+Stĺpce \textbf{hour}, \textbf{month}, \textbf{weekday} sú cyklické (po 23. hodine je 0.), one-hot by pridal 43 stĺpcov.
+Použil som \textbf{cyklické kódovanie} $\sin(2\pi x/T)$ a $\cos(2\pi x/T)$ s periódou 24, 12 a 7: každý stĺpec sa
+zmení na dva a hodina 23 je blízko hodiny 0. Stĺpec \textbf{season} (4 hodnoty) je kódovaný \textbf{one-hot}.
+Po kódovaní je \textbf{17 vstupov}: \textbf{sensor\_co}, \textbf{sensor\_nmhc}, \textbf{sensor\_nox}, \textbf{sensor\_no2}, \textbf{sensor\_o3}, \textbf{temperature}, \textbf{humidity}, \textbf{hour\_sin}, \textbf{hour\_cos}, \textbf{month\_sin}, \textbf{month\_cos}, \textbf{weekday\_sin}, \textbf{weekday\_cos}, \textbf{season\_winter}, \textbf{season\_spring}, \textbf{season\_summer}, \textbf{season\_autumn}, a výstup \textbf{co}.
 
-\subsection{Rozdelenie dát a normalizácia}
-% TODO
+\obr{p1_hodiny.png}{0.45}{Hodiny po cyklickom kódovaní, farba je priemerné \textbf{co}. Vidno rannú a večernú dopravnú špičku.}
+
+\subsection{Rozdelenie a normalizácia}
+Dáta som rozdelil na trénovaciu (80 percent, 5 837 riadkov) a testovaciu (20 percent, 1 460 riadkov) množinu,
+potom na vstupy X a výstup y = \textbf{co}. Vstupy som štandardizoval (\texttt{StandardScaler}) so scalerom nastaveným
+len na trénovacej množine, výstup zostal v mg/m³. Stromové modely trénujem na neškálovaných vstupoch (strom
+porovnáva s prahom, škálovanie nemá vplyv a prahy sa dajú čítať), SVM na škálovaných, lebo pracuje so
+vzdialenosťami.
 
 \section{Modely}
 
 \subsection{Rozhodovací strom}
-% TODO
+Strom bez obmedzenia má 4 082 listov, R² train 1,000 a test 0,884, teda je pretrénovaný. Skúšal som obmedziť
+maximálnu hĺbku a minimálny počet riadkov v liste (pre-pruning).
 
-\subsection{Vizualizácia stromu}
-% TODO
+\obr{tab_strom_sweep.png}{0.7}{Rozhodovací strom podľa obmedzenia hĺbky a minimálneho počtu riadkov v liste.}
 
-\subsection{Ensemble model}
-% TODO
+Najlepší je strom s \textbf{min\_samples\_leaf = 20} (231 listov): \textbf{R² test 0,910}, RMSE 0,433 mg/m³,
+rozdiel train a test len 0,02. Pre vizualizáciu som natrénoval menší strom s \textbf{hĺbkou 3} (8 listov,
+R² test 0,856).
 
-\subsection{Dôležitosť príznakov}
-% TODO
+\obr{p2_strom.png}{1.0}{Rozhodovací strom s hĺbkou 3, value je priemerné \textbf{co} v mg/m³ v uzle.}
+
+Strom sa vo všetkých siedmich uzloch pýta na \textbf{sensor\_nmhc}, najinformatívnejší vstup. Koreň delí prahom
+1 122,5: pod ním je priemerné \textbf{co} 1,49, nad ním 4,01 mg/m³. Listy idú zľava doprava od 0,76 po 7,05 mg/m³,
+strom je schodovitá aproximácia rastúcej závislosti \textbf{co} od senzora. Najväčšiu chybu má pravý krajný list
+(len 88 riadkov, práve tam sú špičky znečistenia).
+
+\subsection{Ensemble model: Random Forest}
+Zvolil som \textbf{Random Forest} (bagging): 300 stromov, každý trénovaný na náhodnom výbere riadkov
+s opakovaním a v každom uzle vyberá z náhodných 4 zo 17 príznakov (\texttt{max\_features="sqrt"}). Výsledok je
+priemer stromov. Dosiahol \textbf{R² test 0,940}, RMSE 0,353 mg/m³ (train 0,991, stromy v lese rastú bez
+obmedzenia, ale priemer sa na teste pretrénovaním neprejaví).
+
+\obr{p2_dolezitost.png}{0.65}{Dôležitosť vstupných príznakov podľa Random Forestu (podiel na znížení MSE, súčet 1).}
+
+Najdôležitejšie sú senzory (\textbf{sensor\_nmhc} 33 percent, \textbf{sensor\_co} 21, \textbf{sensor\_o3} 16, \textbf{sensor\_nox} 13, \textbf{sensor\_no2} 6,
+spolu 89 percent), potom hodina (4 percentá), teplota a vlhkosť (po 1 až 2 percentá). Mesiac, deň v týždni
+a ročné obdobie sú pod 1 percento. Dôležitosť je rozdelená medzi senzory, lebo spolu silno korelujú a nesú
+podobnú informáciu.
 
 \subsection{SVM}
-% TODO
+Použil som \texttt{SVR} s \textbf{RBF jadrom} na škálovaných vstupoch, epsilon = 0,1 (rozlíšenie merania \textbf{co}).
+Na všetkých 17 príznakoch som prešiel C od 1 po 30, gamma od 0,01 po 0,3 a porovnal tri druhy jadra.
+
+\obr{tab_svm_C.png}{0.7}{Vplyv C a druhu jadra na všetkých 17 príznakoch.}
+
+Zvolil som \textbf{C = 10, gamma = scale}: \textbf{R² test 0,957}, RMSE 0,298 mg/m³, rozdiel train a test len 0,007.
+Väčšie C alebo gamma zlepšujú test už len o tisíciny a zväčšujú pretrénovanie. Lineárne jadro dosiahlo 0,906,
+vzťah senzorov a CO je nelineárny.
+
+\obr{p2_svm_1d.png}{0.6}{Samostatný SVR (RBF, C = 10) natrénovaný len na jednom príznaku \textbf{sensor\_nmhc} (R² test 0,885, nie model zo 17 príznakov), body sú trénovacie riadky.}
+
+Čiara sleduje tvar dát: pri nízkom signáli rastie pomaly, pri vysokom čoraz rýchlejšie, lebo senzor saturuje.
+Priamka by tento tvar neopísala, preto lineárne jadro dopadlo horšie.
 
 \subsection{Porovnanie modelov a rezíduá}
-% TODO
+\obr{tab_porovnanie.png}{1.0}{Porovnanie troch modelov na trénovacej a testovacej množine.}
+
+Všetky modely majú R² nad 0,9, poradie na teste je \textbf{SVM 0,957, Random Forest 0,940, strom 0,910}.
+Rezíduum je skutočná hodnota mínus predpovedaná; kreslím ho oproti predpovedanej hodnote, kde sa ukáže
+každý systematický vzor.
+
+\obr{p2_rezidua.png}{1.0}{Rezíduá oproti predpovedanej hodnote, modrá trénovacia a červená testovacia množina.}
+\obr{p2_rez_hist.png}{1.0}{Rozdelenie rezíduí na trénovacej a testovacej množine.}
+
+Rezíduá všetkých modelov sú sústredené okolo nuly (priemer na teste od $-0{,}015$ do $-0{,}006$) so symetrickým
+rozdelením, modely teda systematicky nenadhodnocujú ani nepodhodnocujú. Líšia sa rozptylom na teste: 0,43 (strom),
+0,35 (les), 0,30 (SVM). Strom má v trénovacích bodoch zvislé pásy, lebo vracia len 231 hodnôt, po jednej na list.
+Random Forest má modré body výrazne bližšie k nule než červené (train 0,14 oproti test 0,35), SVM má modré
+a červené takmer prekryté. Spoločný vzor: rozptyl
+rastie s predikciou, pri \textbf{co} nad 5 mg/m³ je priemerná chyba 0,44 až 0,67 oproti 0,14 až 0,22 pri nízkych
+hodnotách. Vysokých koncentrácií je v dátach málo (60 testovacích riadkov nad 5) a senzory pri nich saturujú.
+SVM vyhral, lebo závislosť je plynulá a RBF jadro ju opíše hladkou funkciou, kým stromy ju skladajú zo schodov.
+Pre časť 4 beriem \textbf{SVM (RBF, C = 10)}.
 
 \section{Redukcia dimenzie}
 
 \subsection{3D graf vybraných príznakov}
-% TODO
+Pred normalizáciou som vybral \textbf{sensor\_nmhc} (najsilnejšia kladná korelácia s \textbf{co}, 0,92),
+\textbf{sensor\_nox} (najsilnejšia záporná, $-0{,}70$) a \textbf{hour} (časový príznak s najväčším vplyvom, 0,36).
+
+\obr{p3_3d.png}{1.0}{Tri pôvodné príznaky z dvoch uhlov, farba je \textbf{co}.}
+
+Body tvoria zakrivený oblúk: s rastúcim \textbf{sensor\_nmhc} klesá \textbf{sensor\_nox} a farba ide z fialovej na žltú. Vysoké
+CO je len v rohu s vysokým \textbf{sensor\_nmhc} a nízkym \textbf{sensor\_nox}, závislosť je hladká, monotónna a nelineárna.
+Os \textbf{hour} ukazuje denný cyklus: v noci (1. až 6. hodina) sú všetky body v úzkom fialovom páse, najvyššie hodnoty
+sú okolo 8. až 9. a 18. až 20. hodiny, v dopravných špičkách.
 
 \subsection{3D graf po redukcii dimenzie}
-% TODO
+\textbf{PCA} hľadá nové osi ako lineárne kombinácie pôvodných príznakov zoradené podľa vysvetleného rozptylu.
+Spustil som ju na normalizovaných 17 vstupoch bez \textbf{co}, nastavenú na trénovacej množine.
+
+\obr{p3_pca3d.png}{1.0}{Prvé tri hlavné komponenty z dvoch uhlov, farba je \textbf{co}.}
+
+Prvé tri komponenty vysvetľujú len \textbf{60 percent} rozptylu (26 + 20 + 14). Čo každá os znamená
+(váhy pôvodných príznakov):
+\begin{itemize}[nosep]
+  \item \textbf{PC1, os znečistenia}: kladné váhy všetkých senzorov (\textbf{sensor\_nmhc} 0,45,
+  \textbf{sensor\_co} 0,41, \textbf{sensor\_no2} 0,41, \textbf{sensor\_o3} 0,39) a záporná \textbf{sensor\_nox}
+  ($-0{,}38$). Čím väčšie PC1, tým viac znečistenia. S \textbf{co} koreluje na 0,83, farba sa v grafe mení hlavne
+  pozdĺž tejto osi.
+  \item \textbf{PC2, os počasia}: záporná \textbf{temperature} ($-0{,}44$) a leto ($-0{,}41$), kladná
+  \textbf{humidity} (0,32), zima (0,35) a \textbf{month\_cos} (0,45). Veľké PC2 znamená chladno a vlhko.
+  S \textbf{co} koreluje na 0,36.
+  \item \textbf{PC3, os kalendára}: takmer len \textbf{month\_sin} (0,56), \textbf{season\_spring} (0,56)
+  a \textbf{season\_autumn} ($-0{,}48$). S \textbf{co} nesúvisí (0,08). Mesiac má len 12 hodnôt, preto body ležia
+  v rovnobežných vrstvách, každá vrstva je jeden mesiac.
+\end{itemize}
 
 \subsection{Porovnanie grafov}
-% TODO
+Graf z pôvodných príznakov je na analýzu CO lepší: osi majú fyzikálny význam a vidno nelineárny tvar závislosti
+aj dopravné špičky. PCA graf zachováva informáciu zo všetkých 17 príznakov, ale zobrazí len 60 percent rozptylu
+a osi treba čítať z váh. PCA maximalizuje rozptyl vstupov bez ohľadu na výstup, preto dve z troch osí minie na
+ročné obdobie a mesiac, ktoré s CO súvisia slabo.
 
 \section{Výber podmnožiny príznakov}
+Najúspešnejší model SVM (RBF, C = 10) som natrénoval znova na troch zmenšených množinách, s rovnakým
+rozdelením a škálovaním.
 
 \subsection{Podľa korelačnej matice}
-% TODO
+\obr{p4_kor.png}{0.85}{Korelačná matica vstupov a výstupu na trénovacej množine.}
+
+S \textbf{co} silno korelujú len senzory (0,63 až 0,91), slabo \textbf{hour\_sin} (0,36) a \textbf{weekday\_cos} (0,22), ostatné pod 0,17.
+Prah $|r| \ge 0{,}2$ ponechá \textbf{7 príznakov} (päť senzorov, \textbf{hour\_sin}, \textbf{weekday\_cos}), vyradí teplotu, vlhkosť,
+mesiac a \textbf{season}. Výsledok \textbf{R² test 0,933}, RMSE 0,374. Teplota a vlhkosť s CO lineárne nekorelujú, ale
+SVM z nich niečo vyťaží nelineárne, korelácia to nevidí.
 
 \subsection{Podľa dôležitosti príznakov z ensemble modelu}
-% TODO
+
+Príznaky zoradené podľa dôležitosti z Random Forestu beriem, kým kumulatívna dôležitosť nedosiahne
+95 percent: \textbf{9 príznakov} (päť senzorov, \textbf{hour\_sin}, \textbf{temperature}, \textbf{hour\_cos}, \textbf{humidity}), vyradené mesiac,
+deň v týždni a ročné obdobie. Výsledok \textbf{R² test 0,941}, RMSE 0,352, najlepší z troch výberov. Oproti
+korelácii sa sem dostali teplota a vlhkosť, lebo les meria aj nelineárne a kombinované efekty.
 
 \subsection{Podľa variancie pomocou PCA}
-% TODO
+
+\texttt{PCA(n\_components=0.90)} si zoberie toľko komponentov, koľko treba na 90 percent rozptylu:
+\textbf{8 komponentov} (skutočne 92,9 percenta). Výsledok \textbf{R² test 0,924}, RMSE 0,399, najhorší z troch.
+PCA vyberá podľa rozptylu vstupov, nie podľa vzťahu k výstupu, a časť informácie o CO leží v komponentoch
+s malým rozptylom, ktoré sa zahodia.
 
 \subsection{Porovnanie výsledkov}
-% TODO
+\obr{tab_porovnanie4.png}{1.0}{SVM na všetkých 17 príznakoch a na troch zmenšených množinách.}
+\obr{p4_rezidua.png}{0.75}{Rezíduá na testovacej množine podľa množiny príznakov.}
+
+Žiadny výber neprekonal pôvodných 17 príznakov (0,957): dôležitosť RF 0,941, korelácia 0,933, PCA 0,924.
+Rezíduá majú stále priemer blízko nuly a symetrický tvar, len sú širšie (0,35 až 0,40 oproti 0,30), najviac
+pri špičkách nad 5 mg/m³, kde PCA stráca najviac (chyba 0,67 oproti 0,44). Dáta majú jeden dominantný príznak
+(\textbf{sensor\_nmhc} sám dá 0,885) a zvyšné prispievajú po troche, takže každý výber niečo stratí. Najlepší pomer
+dáva výber podľa dôležitosti: 9 vstupov za stratu 0,017 R².
 
 \section*{Záver}
-% TODO
+\begin{itemize}[nosep]
+  \item \textbf{Dáta}: z 9 507 riadkov zostalo 7 297, 17 vstupov (\textbf{season} one-hot, čas cyklicky sin/cos),
+  rozdelenie 80/20, štandardizácia na trénovacej množine.
+  \item \textbf{Modely}: strom R² test 0,910, Random Forest 0,940, \textbf{SVM (RBF, C = 10) 0,957} s RMSE
+  0,30 mg/m³. Modely sú nestranné, chyba rastie pri vysokých koncentráciách.
+  \item \textbf{Redukcia dimenzie}: vybrané príznaky ukazujú hladkú nelineárnu závislosť a dopravné špičky,
+  PCA zhrnie senzory do jednej osi, ale ďalšie dve minie na ročné obdobie.
+  \item \textbf{Výber príznakov}: dôležitosť RF (9 vstupov) 0,941, korelácia (7) 0,933, PCA 90 percent (8) 0,924,
+  žiadny neprekonal plnú množinu.
+  \item Nepovinné úlohy neboli riešené.
+\end{itemize}
+
+\section*{Použitie nástrojov umelej inteligencie}
+Pri vypracovaní zadania bol ako pomocník použitý nástroj umelej inteligencie Claude (Anthropic). Nástroj bol
+využitý na správu a úpravu dokumentu v systéme \LaTeX{}, sumarizáciu výsledkov jednotlivých úloh a pomoc pri
+formulácii textu. Postup riešenia, konfigurácie a výsledný obsah práce boli skontrolované autorom, ktorý za
+obsah práce zodpovedá.
 
 \end{document}
